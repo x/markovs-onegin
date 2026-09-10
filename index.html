@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Markov's Onegin</title>
+<style>
+  :root {
+    --v: #e08a3c;          /* vowel  */
+    --c: #4a7fa5;          /* consonant */
+    --ink: #2b2b2b;
+    --dim: #b9b4ab;
+    --paper: #f4f1ea;
+    --panel: #e9e5dc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 15px/1.5 "Iowan Old Style", Georgia, serif;
+  }
+  .wrap {
+    /* minmax(0,…) so wide output can't steal width from the poem */
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 30px 40px;
+    align-items: start;
+    max-width: 1180px; margin: 0 auto; padding: 36px 32px 64px;
+  }
+  h1 { font-size: 20px; font-weight: normal; margin: 0 0 4px; }
+  h2 { font-size: 11px; font-weight: normal; letter-spacing: .12em;
+       text-transform: uppercase; color: #8a857c; margin: 0 0 10px; }
+  .sub { color: #8a857c; font-size: 13px; margin: 0 0 24px; }
+
+  /* ---- poem ---- */
+  .poem {
+    white-space: pre-wrap; font-size: 16px; line-height: 1.85;
+    word-spacing: 7px; color: var(--dim);
+  }
+  .poem .w { white-space: nowrap; }
+  .poem .l {
+    display: inline-block; min-width: .68em; margin-right: 1px;
+    padding: 0 1px; line-height: 1.25; border-radius: 1px; text-align: center;
+    background: #e6e2d9; color: #b3ada4;
+    transition: background .12s, color .12s;
+  }
+  .poem .l.v { background: var(--v); color: #fff; }
+  .poem .l.c { background: var(--c); color: #fff; }
+  .poem .l.at { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+  /* ---- stats ---- */
+  .stats { margin-top: 0; }
+  .row { display: grid; grid-template-columns: 26px 1fr 62px; align-items: center;
+         gap: 8px; margin-bottom: 5px; font-size: 12px; }
+  .row .lbl { font-style: italic; text-align: right; color: #6f6a62; }
+  .track { position: relative; height: 17px; background: #e3dfd6; border-radius: 2px; }
+  .bar { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 2px;
+         transition: width .12s linear; }
+  .ghost { position: absolute; top: 0; bottom: 0; left: 0; width: 0;
+           border-right: 1px dashed #9d978c; }
+  .num { font-variant-numeric: tabular-nums; color: #6f6a62; }
+  .note { font-size: 11px; color: #9d978c; margin: 10px 0 22px; }
+
+  table.m { border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+  table.m th, table.m td { padding: 5px 10px; text-align: center; min-width: 54px;
+                           font-variant-numeric: tabular-nums; }
+  table.m th { font-weight: normal; font-style: italic; color: #8a857c; }
+  table.m td { color: #fff; }
+
+  /* ---- generator ---- */
+  button {
+    font: inherit; font-style: normal; padding: 7px 20px; cursor: pointer;
+    background: var(--ink); color: var(--paper); border: 0; border-radius: 3px;
+  }
+  button:hover { background: #000; }
+  /* the button floats over the output area, so it never pushes the poem down */
+  .genpanel { position: relative; }
+  #gen { position: absolute; top: -4px; left: 0; z-index: 2; transition: opacity .45s;
+         box-shadow: 0 0 0 7px var(--paper); }
+  #gen.away { opacity: 0; pointer-events: none; }
+
+  .blocks { line-height: 0; min-height: 400px; }   /* reserve the row so nothing jumps on Run */
+  .gline { margin-bottom: 9px; }
+  .gword { display: inline-block; margin-right: 9px; }
+  .blk { display: inline-block; width: 9px; height: 11px; margin-right: 2px;
+         border-radius: 1px; background: #ddd8ce; }
+  .blk.v { background: var(--v); }
+  .blk.c { background: var(--c); }
+
+  /* ---- state diagram ---- */
+  .node { fill: var(--paper); stroke-width: 6; }
+  .node.v { stroke: var(--v); }
+  .node.c { stroke: var(--c); }
+  .node.on.v { fill: var(--v); }
+  .node.on.c { fill: var(--c); }
+  .nodelabel {
+    font-size: 30px; text-anchor: middle; dominant-baseline: central;
+    pointer-events: none;
+  }
+  .nodelabel.v { fill: var(--v); }
+  .nodelabel.c { fill: var(--c); }
+  .nodelabel.on { fill: var(--paper); }
+  .edge {
+    fill: none; stroke: #c6c1b7; stroke-width: 2;
+  }
+  .edge.on { stroke: var(--ink); stroke-width: 4; }
+  .elabel {
+    font-size: 14px; fill: #6f6a62; text-anchor: middle;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .legend { font-size: 12px; color: #8a857c; margin-top: 26px; }
+  .credit {
+    grid-column: 1 / -1; margin: 20px 0 0; padding-top: 18px;
+    border-top: 1px solid #ddd8ce; font-size: 12px; color: #8a857c;
+    text-align: center;
+  }
+  .credit a { color: #6f6a62; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 1px;
+            vertical-align: -1px; margin: 0 4px 0 12px; }
+  @media (max-width: 860px) { .wrap { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- row 1: headings -->
+  <div>
+    <h1>Markov's Onegin</h1>
+    <p class="sub">In 1913 Markov hand-counted 20,000 letters of Pushkin, marking each
+      as vowel or consonant, to show the law of large numbers holds for
+      <em>dependent</em> events.</p>
+  </div>
+  <div>
+    <h1>Markov's Chain</h1>
+    <p class="sub">When the chain is played back, the output simulates the original
+      text's consonant-to-vowel cadence.</p>
+  </div>
+
+  <!-- row 2: the letters -->
+  <div id="poem" class="poem"></div>
+  <div class="genpanel">
+    <button id="gen">Run</button>
+    <div id="out" class="blocks"></div>
+    <p class="legend">
+      <span class="swatch" style="background:var(--v)"></span> vowel
+      <span class="swatch" style="background:var(--c)"></span> consonant
+    </p>
+  </div>
+
+  <!-- row 3: the numbers -->
+  <div class="stats">
+    <h2>Counts so far</h2>
+    <div id="singles"></div>
+    <div style="height:14px"></div>
+    <div id="pairs"></div>
+    <p class="note">Dashed line = what you'd expect if each letter were drawn
+      independently. The gap is the dependence.</p>
+
+    <h2>Transition probability</h2>
+    <table class="m" id="matrix"></table>
+  </div>
+
+  <div>
+    <h2>The chain itself</h2>
+    <svg id="chain" viewBox="0 0 420 200" width="100%" style="max-width:420px">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/>
+        </marker>
+      </defs>
+
+      <path id="e_vc" class="edge" d="M166,68 Q215,22 264,68" marker-end="url(#ah)"/>
+      <path id="e_cv" class="edge" d="M264,132 Q215,178 166,132" marker-end="url(#ah)"/>
+      <path id="e_vv" class="edge" d="M98,72 C34,24 34,176 98,128" marker-end="url(#ah)"/>
+      <path id="e_cc" class="edge" d="M332,72 C396,24 396,176 332,128" marker-end="url(#ah)"/>
+
+      <circle id="nV" class="node v" cx="130" cy="100" r="38"/>
+      <circle id="nC" class="node c" cx="300" cy="100" r="38"/>
+      <text id="tV" class="nodelabel v" x="130" y="100">V</text>
+      <text id="tC" class="nodelabel c" x="300" y="100">C</text>
+
+      <text id="l_vc" class="elabel" x="215" y="26">0.87</text>
+      <text id="l_cv" class="elabel" x="215" y="190">0.67</text>
+      <text id="l_vv" class="elabel" x="22"  y="105">0.13</text>
+      <text id="l_cc" class="elabel" x="408" y="105">0.33</text>
+    </svg>
+  </div>
+
+  <p class="credit">Inspired by the artwork in
+    <a href="https://www.americanscientist.org/article/first-links-in-the-markov-chain">First
+    Links in the Markov Chain</a> by Brian Hayes.</p>
+
+</div>
+
+<script>
+"use strict";
+
+const TEXT = `He was too young to have been blighted
+by the cold world's corrupt finesse;
+his soul still blossomed out, and lighted
+at a friend's word, a girl's caress.
+In heart's affairs, a sweet beginner,
+he fed on hope's deceptive dinner;
+the world's éclat, its thunder-roll,
+still captivated his young soul.
+He sweetened up with fancy's icing
+the uncertainties within his heart;
+for him, the objective on life's chart
+was still mysterious and enticing—
+something to rack his brains about,
+suspecting wonders would come out.`;
+
+const isLetter = ch => /[a-zà-ÿ]/i.test(ch);
+const isVowel  = ch => /[aeiouàâäéèêëïîôöùûü]/i.test(ch);
+const type     = ch => isVowel(ch) ? "v" : "c";
+
+/* ---------- left panel: read the poem ---------- */
+
+const poemEl = document.getElementById("poem");
+const spans = [];
+let word = null;   // words stay whole: letter boxes must not break across lines
+for (const ch of TEXT) {
+  if (/\s/.test(ch)) {
+    word = null;
+    poemEl.appendChild(document.createTextNode(ch));
+    continue;
+  }
+  if (!word) {
+    word = document.createElement("span");
+    word.className = "w";
+    poemEl.appendChild(word);
+  }
+  if (isLetter(ch)) {
+    const s = document.createElement("span");
+    s.className = "l";
+    s.textContent = ch;
+    s.dataset.t = type(ch);
+    word.appendChild(s);
+    spans.push(s);
+  } else {
+    word.appendChild(document.createTextNode(ch));
+  }
+}
+
+const single = { v: 0, c: 0 };
+const pair = { vv: 0, vc: 0, cv: 0, cc: 0 };
+
+// bar rows, built once
+function makeRows(host, keys, colorOf) {
+  return keys.map(k => {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `<div class="lbl">${k}</div>
+      <div class="track"><div class="ghost"></div><div class="bar" style="background:${colorOf(k)}"></div></div>
+      <div class="num">0</div>`;
+    host.appendChild(row);
+    return { bar: row.querySelector(".bar"), ghost: row.querySelector(".ghost"), num: row.querySelector(".num") };
+  });
+}
+const singleColor = k => k === "v" ? "var(--v)" : "var(--c)";
+const pairColor = k => k === "vv" ? "var(--v)" : k === "cc" ? "var(--c)"
+                     : "linear-gradient(90deg,var(--" + k[0] + ") 50%,var(--" + k[1] + ") 50%)";
+
+const SKEYS = ["v", "c"], PKEYS = ["vv", "vc", "cv", "cc"];
+const srows = makeRows(document.getElementById("singles"), SKEYS, singleColor);
+const prows = makeRows(document.getElementById("pairs"), PKEYS, pairColor);
+
+const matrix = document.getElementById("matrix");
+matrix.innerHTML = `
+  <tr><th></th><th>→ v</th><th>→ c</th></tr>
+  <tr><th>v →</th><td id="p_vv"></td><td id="p_vc"></td></tr>
+  <tr><th>c →</th><td id="p_cv"></td><td id="p_cc"></td></tr>`;
+
+function render() {
+  const nS = single.v + single.c || 1;
+  const nP = pair.vv + pair.vc + pair.cv + pair.cc || 1;
+  const pv = single.v / nS, pc = single.c / nS;
+
+  SKEYS.forEach((k, i) => {
+    srows[i].bar.style.width = (100 * single[k] / nS) + "%";
+    srows[i].num.textContent = single[k];
+  });
+
+  // expected pair counts if letters were independent
+  const exp = { vv: pv * pv, vc: pv * pc, cv: pc * pv, cc: pc * pc };
+  const scale = Math.max(...PKEYS.map(k => Math.max(pair[k], exp[k] * nP)), 1);
+  PKEYS.forEach((k, i) => {
+    prows[i].bar.style.width = (100 * pair[k] / scale) + "%";
+    prows[i].ghost.style.width = (100 * exp[k] * nP / scale) + "%";
+    prows[i].num.textContent = pair[k];
+  });
+
+  for (const from of "vc") {
+    const tot = pair[from + "v"] + pair[from + "c"] || 1;
+    for (const to of "vc") {
+      const p = pair[from + to] / tot;
+      const cell = document.getElementById("p_" + from + to);
+      cell.textContent = p.toFixed(3);
+      cell.style.background = to === "v" ? "var(--v)" : "var(--c)";
+      cell.style.opacity = 0.35 + 0.65 * p;
+      document.getElementById("l_" + from + to).textContent = p.toFixed(2);
+    }
+  }
+}
+
+/* ---------- state diagram ---------- */
+
+const NODE = { v: [document.getElementById("nV"), document.getElementById("tV")],
+               c: [document.getElementById("nC"), document.getElementById("tC")] };
+const EDGE = {};
+PKEYS.forEach(k => EDGE[k] = document.getElementById("e_" + k));
+
+function setActive(to, from) {
+  for (const s of "vc") NODE[s].forEach(el => el.classList.toggle("on", s === to));
+  PKEYS.forEach(k => EDGE[k].classList.toggle("on", k === from + to));
+}
+function clearActive() {
+  for (const s of "vc") NODE[s].forEach(el => el.classList.remove("on"));
+  PKEYS.forEach(k => EDGE[k].classList.remove("on"));
+}
+
+let timer = null, at = 0;
+function replay() {
+  clearInterval(timer);
+  at = 0;
+  single.v = single.c = 0;
+  PKEYS.forEach(k => pair[k] = 0);
+  spans.forEach(s => s.className = "l");
+  clearActive();
+  render();
+  timer = setInterval(step, 38);
+}
+function step() {
+  if (at > 0) spans[at - 1].classList.remove("at");
+  if (at >= spans.length) { clearInterval(timer); return; }
+  const s = spans[at], t = s.dataset.t;
+  s.classList.add(t, "at");
+  single[t]++;
+  if (at > 0) pair[spans[at - 1].dataset.t + t]++;
+  at++;
+  render();
+}
+
+/* ---------- right panel: generate from the chain ---------- */
+
+// word / line shape borrowed from the poem
+const WORDS = TEXT.split(/\s+/).map(w => [...w].filter(isLetter).length).filter(n => n > 0);
+const LINES = TEXT.split("\n").map(l => l.split(/\s+/).filter(Boolean).length);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+
+function transitions() {
+  // fall back to the whole poem before the reading has enough pairs
+  const src = (pair.vv + pair.vc + pair.cv + pair.cc) >= 50 ? pair : fullPairs;
+  const out = {};
+  for (const from of "vc") {
+    const tot = src[from + "v"] + src[from + "c"] || 1;
+    out[from] = src[from + "v"] / tot;   // P(next = v | from)
+  }
+  return out;
+}
+const fullPairs = (() => {
+  const p = { vv: 0, vc: 0, cv: 0, cc: 0 };
+  for (let i = 1; i < spans.length; i++) p[spans[i - 1].dataset.t + spans[i].dataset.t]++;
+  return p;
+})();
+
+const out = document.getElementById("out");
+let genTimer = null;
+
+const genBtn = document.getElementById("gen");
+
+function generate() {
+  clearInterval(genTimer);
+  clearInterval(timer);
+  genBtn.classList.add("away");
+  while (at < spans.length) step();   // finish the reading so the chain has one driver
+  out.innerHTML = "";
+  const P = transitions();
+  const startV = single.v + single.c ? single.v / (single.v + single.c) : 0.389;
+  let state = Math.random() < startV ? "v" : "c";
+  const blocks = [];
+
+  for (const nWords of LINES) {
+    const line = document.createElement("div");
+    line.className = "gline";
+    for (let w = 0; w < nWords; w++) {
+      const word = document.createElement("span");
+      word.className = "gword";
+      for (let i = 0, len = pick(WORDS); i < len; i++) {
+        const b = document.createElement("span");
+        b.className = "blk";
+        b.dataset.t = state;
+        word.appendChild(b);
+        blocks.push(b);
+        state = Math.random() < P[state] ? "v" : "c";
+      }
+      line.appendChild(word);
+    }
+    out.appendChild(line);
+  }
+
+  let i = 0;
+  genTimer = setInterval(() => {
+    if (i >= blocks.length) {
+      clearInterval(genTimer); clearActive();
+      genBtn.classList.remove("away");
+      return;
+    }
+    const t = blocks[i].dataset.t;
+    blocks[i].classList.add(t);
+    setActive(t, i > 0 ? blocks[i - 1].dataset.t : t);
+    i++;
+  }, 45);
+}
+
+genBtn.onclick = generate;
+replay();
+
+/* ---------- self-check ---------- */
+(function selfCheck() {
+  const n = spans.length;
+  const tot = fullPairs.vv + fullPairs.vc + fullPairs.cv + fullPairs.cc;
+  console.assert(tot === n - 1, "pair counts must total letters-1", tot, n - 1);
+  const P = transitions();
+  console.assert(P.v >= 0 && P.v <= 1 && P.c >= 0 && P.c <= 1, "probabilities out of range", P);
+  console.assert(WORDS.length === LINES.reduce((a, b) => a + b, 0), "word/line shape mismatch");
+  console.assert(type("e") === "v" && type("b") === "c", "classifier broken");
+  console.log("self-check ok:", n, "letters,", tot, "transitions, P(v|v)=" + P.v.toFixed(3));
+})();
+</script>
+</body>
+</html>
