@@ -77,10 +77,11 @@
   #gen.away { opacity: 0; pointer-events: none; }
 
   .blocks { line-height: 0; min-height: 400px; }   /* reserve the row so nothing jumps on Run */
-  .gline { margin-bottom: 9px; }
-  .gword { display: inline-block; margin-right: 9px; }
-  .blk { display: inline-block; width: 9px; height: 11px; margin-right: 2px;
-         border-radius: 1px; background: #ddd8ce; }
+  /* box metrics mirror .poem .l: 16px * 1.25 line-height = 20px tall, .68em wide */
+  .gline { margin-bottom: 10px; }
+  .gword { display: inline-block; margin-right: 10px; }
+  .blk { display: inline-block; width: 11px; height: 20px; margin-right: 1px;
+         border-radius: 1px; background: #e6e2d9; }
   .blk.v { background: var(--v); }
   .blk.c { background: var(--c); }
 
