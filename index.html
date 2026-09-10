@@ -115,28 +115,37 @@
   .credit a { color: #6f6a62; }
   .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 1px;
             vertical-align: -1px; margin: 0 4px 0 12px; }
-  @media (max-width: 860px) { .wrap { grid-template-columns: 1fr; } }
+  /* One column: read the whole left side, then the whole right side.
+     Ties in `order` fall back to source order, so each column stays internally ordered. */
+  @media (max-width: 860px) {
+    .wrap { grid-template-columns: 1fr; }
+    .colL { order: 1; }
+    .colR { order: 2; }
+    .credit { order: 3; }
+    .blocks { min-height: 0; }              /* nothing to align to, so reserve nothing */
+    #gen { position: static; margin-bottom: 18px; box-shadow: none; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <!-- row 1: headings -->
-  <div>
+  <div class="colL">
     <h1>Markov's Onegin</h1>
     <p class="sub">In 1913 Markov hand-counted 20,000 letters of Pushkin, marking each
       as vowel or consonant, to show the law of large numbers holds for
       <em>dependent</em> events.</p>
   </div>
-  <div>
+  <div class="colR">
     <h1>Markov's Chain</h1>
     <p class="sub">When the chain is played back, the output simulates the original
       text's consonant-to-vowel cadence.</p>
   </div>
 
   <!-- row 2: the letters -->
-  <div id="poem" class="poem"></div>
-  <div class="genpanel">
+  <div id="poem" class="poem colL"></div>
+  <div class="genpanel colR">
     <button id="gen">Run</button>
     <div id="out" class="blocks"></div>
     <p class="legend">
@@ -146,7 +155,7 @@
   </div>
 
   <!-- row 3: the numbers -->
-  <div class="stats">
+  <div class="stats colL">
     <h2>Counts so far</h2>
     <div id="singles"></div>
     <div style="height:14px"></div>
@@ -158,7 +167,7 @@
     <table class="m" id="matrix"></table>
   </div>
 
-  <div>
+  <div class="colR">
     <h2>The chain itself</h2>
     <svg id="chain" viewBox="0 0 420 200" width="100%" style="max-width:420px">
       <defs>
