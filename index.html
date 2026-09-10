@@ -336,7 +336,7 @@ function replay() {
   spans.forEach(s => s.className = "l");
   clearActive();
   render();
-  timer = setInterval(step, 38);
+  timer = setInterval(step, 49);
 }
 function step() {
   if (at > 0) spans[at - 1].classList.remove("at");
@@ -418,7 +418,7 @@ function generate() {
     blocks[i].classList.add(t);
     setActive(t, i > 0 ? blocks[i - 1].dataset.t : t);
     i++;
-  }, 45);
+  }, 59);
 }
 
 genBtn.onclick = generate;
