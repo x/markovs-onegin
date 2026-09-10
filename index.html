@@ -12,6 +12,11 @@
     --dim: #b9b4ab;
     --paper: #f4f1ea;
     --panel: #e9e5dc;
+    /* one type rhythm for both columns: box height, and the leading around it */
+    --fs: 16px;
+    --lh: 1.85;
+    --box: 20px;
+    --lead: calc(var(--fs) * var(--lh) - var(--box));
   }
   * { box-sizing: border-box; }
   body {
@@ -31,13 +36,14 @@
 
   /* ---- poem ---- */
   .poem {
-    white-space: pre-wrap; font-size: 16px; line-height: 1.85;
+    white-space: pre-wrap; font-size: var(--fs); line-height: var(--lh);
     word-spacing: 7px; color: var(--dim);
   }
   .poem .w { white-space: nowrap; }
   .poem .l {
     display: inline-block; min-width: .68em; margin-right: 1px;
-    padding: 0 1px; line-height: 1.25; border-radius: 1px; text-align: center;
+    padding: 0 1px; height: var(--box); line-height: var(--box);
+    border-radius: 1px; text-align: center;
     background: #e6e2d9; color: #b3ada4;
     transition: background .12s, color .12s;
   }
@@ -76,11 +82,14 @@
          box-shadow: 0 0 0 7px var(--paper); }
   #gen.away { opacity: 0; pointer-events: none; }
 
-  .blocks { line-height: 0; min-height: 400px; }   /* reserve the row so nothing jumps on Run */
-  /* box metrics mirror .poem .l: 16px * 1.25 line-height = 20px tall, .68em wide */
-  .gline { margin-bottom: 10px; }
+  /* same rhythm as the poem: half the leading above row one, the rest between rows */
+  .blocks {
+    line-height: 0; min-height: 400px;   /* reserve the row so nothing jumps on Run */
+    padding-top: calc(var(--lead) / 2);
+  }
+  .gline { margin-bottom: var(--lead); }
   .gword { display: inline-block; margin-right: 10px; }
-  .blk { display: inline-block; width: 11px; height: 20px; margin-right: 1px;
+  .blk { display: inline-block; width: 11px; height: var(--box); margin-right: 1px;
          border-radius: 1px; background: #e6e2d9; }
   .blk.v { background: var(--v); }
   .blk.c { background: var(--c); }
@@ -389,13 +398,20 @@ function generate() {
   let state = Math.random() < startV ? "v" : "c";
   const blocks = [];
 
+  // a wrapped line would break the shared row rhythm, so lines are also width-capped
+  const BLK = 12, GAP = 10, budget = out.clientWidth;
+
   for (const nWords of LINES) {
     const line = document.createElement("div");
     line.className = "gline";
+    let x = 0;
     for (let w = 0; w < nWords; w++) {
+      const len = pick(WORDS);
+      if (x + len * BLK + GAP > budget) break;
+      x += len * BLK + GAP;
       const word = document.createElement("span");
       word.className = "gword";
-      for (let i = 0, len = pick(WORDS); i < len; i++) {
+      for (let i = 0; i < len; i++) {
         const b = document.createElement("span");
         b.className = "blk";
         b.dataset.t = state;
@@ -410,11 +426,7 @@ function generate() {
 
   let i = 0;
   genTimer = setInterval(() => {
-    if (i >= blocks.length) {
-      clearInterval(genTimer); clearActive();
-      genBtn.classList.remove("away");
-      return;
-    }
+    if (i >= blocks.length) { clearInterval(genTimer); clearActive(); return; }
     const t = blocks[i].dataset.t;
     blocks[i].classList.add(t);
     setActive(t, i > 0 ? blocks[i - 1].dataset.t : t);
